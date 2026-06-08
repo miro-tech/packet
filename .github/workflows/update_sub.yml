@@ -1,0 +1,31 @@
+name: Generate Subscription
+on:
+  schedule:
+    - cron: '0 * * * *' # Обновление каждый час
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Позволяет запускать вручную из интерфейса GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Process configs
+        run: |
+          # Ваш запрос с использованием токена из Secret
+          curl -k -H "Authorization: token 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" \
+               -L "https://raw.githubusercontent.com/Roadlux/PacketVPN1.5.3-NEW/main/configInfo" \
+               | jq -r '.configs[].config.stringServer' | base64 > sub.txt
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          publish_branch: gh-pages # Файл будет доступен в этой ветке
+          force_orphan: true
+          
