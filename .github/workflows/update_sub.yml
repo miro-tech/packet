@@ -13,14 +13,26 @@ jobs:
     steps:
       - name: Process configs
         run: |
-          # Получаем данные
+          # Получаем данные и сохраняем в файл
           curl -k -H "Authorization: token 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" \
                -L "https://raw.githubusercontent.com/Roadlux/PacketVPN1.5.3-NEW/main/configInfo" \
                | jq -r '.configs[].config.stringServer' | base64 > sub.txt
 
-      - name: Update Gist
-        uses: exuanbo/actions-gist@v1
-        with:
-          token: ${{ secrets.PACKETTOKEN }} # Нужно создать в Secrets
-          gist_id: 5d53a0965ad16d964c5fb366e11532ff # Вставьте ваш ID
-          file_path: sub.txt
+      - name: Update Gist via API
+        env:
+          GIST_TOKEN: ${{ secrets.PACKETTOKEN }}
+          GIST_ID: 5d53a0965ad16d964c5fb366e11532ff # Вставьте ваш Gist ID сюда
+        run: |
+          # Читаем содержимое файла и экранируем его для JSON
+          CONTENT=$(cat sub.txt)
+          # Используем jq для создания JSON-запроса, чтобы избежать проблем с кавычками
+          jq -n --arg content "$CONTENT" \
+          '{files: {"sub.txt": {content: $content}}}' > payload.json
+          
+          # Отправляем PATCH запрос к API GitHub
+          curl -L -X PATCH \
+            -H "Authorization: token $GIST_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @payload.json \
+            https://api.github.com/gists/$GIST_ID
+            
