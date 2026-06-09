@@ -1,54 +1,39 @@
 import os
 import json
-import requests
+import urllib.request
 
-# Конфигурация
 GIST_ID = "5d53a0965ad16d964c5fb366e11532ff"
-# Токен для скачивания (тот самый, который вы указали)
 DOWNLOAD_TOKEN = "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"
-# Токен для обновления Gist (из ваших Secrets)
-GIST_TOKEN = os.getenv("PACKETTOKEN")
-
+GIST_TOKEN = os.getenv("GIST_TOKEN")
 SOURCE_URL = "https://raw.githubusercontent.com/Roadlux/PacketVPN1.5.3-NEW/main/configInfo"
 
 def update():
-    # 1. Скачиваем данные из репозитория
-    print("Скачивание данных...")
-    headers = {"Authorization": f"token {DOWNLOAD_TOKEN}"}
-    response = requests.get(SOURCE_URL, headers=headers)
+    # Шаг 1: Скачиваем конфиги (аналог curl)
+    req = urllib.request.Request(SOURCE_URL, headers={"Authorization": f"token {DOWNLOAD_TOKEN}"})
+    with urllib.request.urlopen(req) as response:
+        data = json.loads(response.read().decode())
     
-    if response.status_code != 200:
-        print(f"Ошибка скачивания: {response.status_code} - {response.text}")
-        return
-
-    # 2. Обработка JSON и извлечение VLESS строк
-    data = response.json()
+    # Шаг 2: Извлекаем строки (аналог jq -r '.configs[].config.stringServer')
     configs = [c['config']['stringServer'] for c in data['configs']]
     content = "\n".join(configs)
     
-    # 3. Обновление Gist
-    print("Обновление Gist...")
-    gist_headers = {
-        "Authorization": f"token {GIST_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "files": {
-            "sub.txt": {"content": content}
-        }
-    }
-    
-    gist_response = requests.patch(
+    # Шаг 3: Отправляем в Gist (аналог вашего предыдущего метода)
+    payload = json.dumps({"files": {"sub.txt": {"content": content}}}).encode('utf-8')
+    gist_req = urllib.request.Request(
         f"https://api.github.com/gists/{GIST_ID}",
-        headers=gist_headers,
-        json=payload
+        data=payload,
+        method="PATCH",
+        headers={
+            "Authorization": f"token {GIST_TOKEN}",
+            "Content-Type": "application/json"
+        }
     )
     
-    if gist_response.status_code == 200:
-        print("Gist успешно обновлен!")
-    else:
-        print(f"Ошибка обновления Gist: {gist_response.status_code}")
-        print(gist_response.text)
+    with urllib.request.urlopen(gist_req) as response:
+        if response.status == 200:
+            print("Gist updated successfully!")
+        else:
+            print(f"Error: {response.status}")
 
 if __name__ == "__main__":
     update()
