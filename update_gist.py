@@ -1,45 +1,26 @@
 import os
 import json
 import urllib.request
+import base64
 
 # Конфигурация
 GIST_ID = "5d53a0965ad16d964c5fb366e11532ff"
-GITHUB_TOKEN = os.getenv("GIST_TOKEN") # Используем тот же токен из Secrets
-SOURCE_URL = "https://raw.githubusercontent.com/Roadlux/PacketVPN1.5.3-NEW/main/configInfo"
+GITHUB_TOKEN = os.getenv("GIST_TOKEN")
+
+# URL для получения файла через GitHub API
+# Если репозиторий чужой, убедитесь, что токен имеет права доступа к нему
+FILE_API_URL = "https://api.github.com/repos/Roadlux/PacketVPN1.5.3-NEW/contents/configInfo"
+GIST_API_URL = f"https://api.github.com/gists/{GIST_ID}"
 
 def update():
-    # 1. Скачиваем данные с использованием токена
+    # 1. Скачиваем данные файла через API
     req_get = urllib.request.Request(
-        SOURCE_URL,
-        headers={"Authorization": f"token {GITHUB_TOKEN}"}
+        FILE_API_URL,
+        headers={
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github.v3+json"
+        }
     )
     
     with urllib.request.urlopen(req_get) as response:
-        data = json.loads(response.read().decode())
-    
-    # 2. Формируем строку
-    configs = [c['config']['stringServer'] for c in data['configs']]
-    content = "\n".join(configs)
-    
-    # 3. Отправляем в Gist
-    payload = {
-        "files": {
-            "sub.txt": {"content": content}
-        }
-    }
-    
-    req_patch = urllib.request.Request(
-        f"https://api.github.com/gists/{GIST_ID}",
-        data=json.dumps(payload).encode('utf-8'),
-        headers={
-            "Authorization": f"token {GITHUB_TOKEN}",
-            "Content-Type": "application/json"
-        },
-        method="PATCH"
-    )
-    
-    with urllib.request.urlopen(req_patch) as response:
-        print("Gist updated successfully!")
-
-if __name__ == "__main__":
-    update()
+        file_data = json.loads(response.read().decode())
