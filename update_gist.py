@@ -2,6 +2,7 @@ import os
 import json
 import urllib.request
 import urllib.parse
+import base64
 from datetime import datetime, timedelta, timezone
 
 # Конфигурационные данные
@@ -16,28 +17,54 @@ def update():
     with urllib.request.urlopen(req) as response:
         data = json.loads(response.read().decode())
     
-    # Шаг 2: Извлекаем fragmentServer и формируем VLESS-ссылки
     configs = []
     
-    # Добавляем заголовок с временем
+    # Добавляем информационный заголовок с временем обновления
     ural_offset = timezone(timedelta(hours=5))
     ural_time = datetime.now(ural_offset).strftime('%d.%m.%Y %H:%M:%S')
     header_line = f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?type=none#🕒_Update_Ural:_{ural_time}"
     configs.append(header_line)
     
-    for c in data.get('configs', []):
+    # Шаг 2: Извлекаем fragmentServer и формируем ссылки
+    configs_list = data.get('configs', [])
+    
+    for idx, c in enumerate(configs_list):
         fs = c.get('config', {}).get('fragmentServer')
         if fs:
-            # Извлекаем параметры (ключи адаптированы под типичные структуры)
-            uuid = fs.get('id', '00000000-0000-0000-0000-000000000000')
-            addr = fs.get('address', '127.0.0.1')
-            port = fs.get('port', 443)
+            # Выводим структуру первого объекта в консоль Termux для визуального контроля
+            if idx == 0:
+                print("--- СТРУКТУРА ВАШЕГО fragmentServer (ДЛЯ ОТЛАДКИ) ---")
+                print(json.dumps(fs, indent=2))
+                print("-----------------------------------------------------")
+
+            # Пробуем разные варианты названий ключей, которые могут быть в JSON
+            addr = fs.get('server') or fs.get('address') or fs.get('host') or '127.0.0.1'
+            port = fs.get('port') or 443
+            uuid = fs.get('uuid') or fs.get('id') or fs.get('password') or '00000000-0000-0000-0000-000000000000'
             
-            # Формируем имя для ссылки
-            name = f"Proxy_{addr}"
+            # Извлекаем транспортные протоколы и общие параметры, если они есть
+            net_type = fs.get('network') or fs.get('type') or 'tcp'
+            security = fs.get('security') or 'none'
+            sni = fs.get('sni') or ''
+            path = fs.get('path') or ''
             
-            # Собираем ссылку. Параметры можно расширить, если нужно (security, sni, etc.)
-            link = f"vless://{uuid}@{addr}:{port}?type=tcp&security=none#{urllib.parse.quote(name)}"
+            # Строим дополнительные параметры (Query параметры)
+            query_params = {
+                "type": net_type,
+                "security": security
+            }
+            if sni:
+                query_params["sni"] = sni
+            if path:
+                query_params["path"] = path
+                
+            query_string = urllib.parse.urlencode(query_params)
+            
+            # Имя профиля в Nekobox
+            name = f"Proxy_{addr}_{port}"
+            
+            # Собираем готовую VLESS строку
+            link = f"vless://{uuid}@{addr}:{port}?{query_string}#{urllib.parse.quote(name)}"
             configs.append(link)
     
     content = "\n".join(configs)
