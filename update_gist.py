@@ -15,7 +15,7 @@ def update():
         data = json.loads(response.read().decode())
     
     # Шаг 2: Извлекаем строки
-    configs = [c['config']['stringServer'] for c in data['configs']]
+    configs = [c['config']['fragmentServer'] for c in data['configs']]
     
     # --- ДОБАВЛЕНИЕ ВРЕМЕНИ (УРАЛ, UTC+5) ---
     ural_offset = timezone(timedelta(hours=5))
