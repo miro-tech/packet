@@ -15,36 +15,59 @@ def update():
         data = json.loads(response.read().decode())
     
     configs = []
-    
-    # Добавляем заголовок времени
     ural_offset = timezone(timedelta(hours=5))
     ural_time = datetime.now(ural_offset).strftime('%d.%m.%Y %H:%M:%S')
     configs.append(f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?type=none#🕒_Update_Ural:_{ural_time}")
     
     for c in data.get('configs', []):
-        # Достаем прокси из outbounds -> vnext
-        outbounds = c.get('config', {}).get('fragmentServer', {}).get('outbounds', [])
+        fs = c.get('config', {}).get('fragmentServer', {})
+        outbounds = fs.get('outbounds', [])
         proxy = next((o for o in outbounds if o.get('tag') == 'proxy'), None)
         
         if proxy:
-            vnext = proxy.get('settings', {}).get('vnext', [{}])[0]
-            user = vnext.get('users', [{}])[0]
-            stream = proxy.get('streamSettings', {})
+            proto = proxy.get('protocol')
+            name = c.get('countryName', 'Proxy')
             
-            # Данные для ссылки
-            uuid = user.get('id')
-            addr = vnext.get('address')
-            port = vnext.get('port')
-            net = stream.get('network')
-            
-            # Собираем VLESS ссылку
-            # Формат: vless://uuid@addr:port?type=network#name
-            link = f"vless://{uuid}@{addr}:{port}?type={net}&security=none#{urllib.parse.quote(c.get('countryName', 'Proxy'))}"
-            configs.append(link)
+            # Логика для TROJAN
+            if proto == 'trojan':
+                svr = proxy.get('settings', {}).get('servers', [{}])[0]
+                addr = svr.get('address')
+                port = svr.get('port')
+                pwd = svr.get('password')
+                stream = proxy.get('streamSettings', {})
+                reality = stream.get('realitySettings', {})
+                xhttp = stream.get('xhttpSettings', {})
+                
+                params = {
+                    "security": "reality",
+                    "sni": reality.get('serverName'),
+                    "fp": reality.get('fingerprint'),
+                    "pbk": reality.get('publicKey'),
+                    "sid": reality.get('shortId'),
+                    "type": stream.get('network'),
+                    "path": xhttp.get('path'),
+                    "host": xhttp.get('host')
+                }
+                # Удаляем None значения из params
+                params = {k: v for k, v in params.items() if v is not None}
+                link = f"trojan://{pwd}@{addr}:{port}?{urllib.parse.urlencode(params)}#{urllib.parse.quote(name)}"
+                configs.append(link)
+
+            # Логика для VLESS
+            elif proto == 'vless':
+                vnext = proxy.get('settings', {}).get('vnext', [{}])[0]
+                user = vnext.get('users', [{}])[0]
+                addr = vnext.get('address')
+                port = vnext.get('port')
+                uuid = user.get('id')
+                net = proxy.get('streamSettings', {}).get('network', 'tcp')
+                
+                link = f"vless://{uuid}@{addr}:{port}?type={net}&security=none#{urllib.parse.quote(name)}"
+                configs.append(link)
             
     content = "\n".join(configs)
     
-    # Шаг 3: Отправляем в Gist
+    # Отправка в Gist
     payload = json.dumps({"files": {"sub.txt": {"content": content}}}).encode('utf-8')
     gist_req = urllib.request.Request(
         f"https://api.github.com/gists/{GIST_ID}",
