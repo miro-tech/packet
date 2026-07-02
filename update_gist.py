@@ -4,9 +4,9 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 GIST_ID = "5d53a0965ad16d964c5fb366e11532ff"
-DOWNLOAD_TOKEN = "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"
+DOWNLOAD_TOKEN = "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"
 GIST_TOKEN = os.getenv("GIST_TOKEN")
-SOURCE_URL = "https://raw.githubusercontent.com/Roadlux/PacketVPN1.5.3-NEW/main/configInfo"
+SOURCE_URL = "https://raw.githubusercontent.com/Roadlux/assets-1.5.3.1/main/data"
 
 def update():
     # Шаг 1: Скачиваем конфиги
