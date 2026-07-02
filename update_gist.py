@@ -15,29 +15,28 @@ def update():
         data = json.loads(response.read().decode())
     
     configs = []
+    
+    # Добавляем временную метку в начало
     ural_offset = timezone(timedelta(hours=5))
     ural_time = datetime.now(ural_offset).strftime('%d.%m.%Y %H:%M:%S')
-    configs.append(f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?type=none#🕒_Update_Ural:_{ural_time}")
+    configs.append(f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?type=none#🕒_Update:_{ural_time}")
     
     for c in data.get('configs', []):
+        name = c.get('countryName', 'Proxy')
         fs = c.get('config', {}).get('fragmentServer', {})
         outbounds = fs.get('outbounds', [])
         proxy = next((o for o in outbounds if o.get('tag') == 'proxy'), None)
         
         if proxy:
             proto = proxy.get('protocol')
-            name = c.get('countryName', 'Proxy')
             
-            # Логика для TROJAN
             if proto == 'trojan':
                 svr = proxy.get('settings', {}).get('servers', [{}])[0]
-                addr = svr.get('address')
-                port = svr.get('port')
-                pwd = svr.get('password')
                 stream = proxy.get('streamSettings', {})
                 reality = stream.get('realitySettings', {})
                 xhttp = stream.get('xhttpSettings', {})
                 
+                # Собираем параметры для Reality
                 params = {
                     "security": "reality",
                     "sni": reality.get('serverName'),
@@ -48,23 +47,20 @@ def update():
                     "path": xhttp.get('path'),
                     "host": xhttp.get('host')
                 }
-                # Удаляем None значения из params
-                params = {k: v for k, v in params.items() if v is not None}
-                link = f"trojan://{pwd}@{addr}:{port}?{urllib.parse.urlencode(params)}#{urllib.parse.quote(name)}"
+                # Убираем None значения
+                params = {k: v for k, v in params.items() if v}
+                
+                link = f"trojan://{svr.get('password')}@{svr.get('address')}:{svr.get('port')}?{urllib.parse.urlencode(params)}#{urllib.parse.quote(name)}"
                 configs.append(link)
-
-            # Логика для VLESS
+                
             elif proto == 'vless':
                 vnext = proxy.get('settings', {}).get('vnext', [{}])[0]
                 user = vnext.get('users', [{}])[0]
-                addr = vnext.get('address')
-                port = vnext.get('port')
-                uuid = user.get('id')
                 net = proxy.get('streamSettings', {}).get('network', 'tcp')
                 
-                link = f"vless://{uuid}@{addr}:{port}?type={net}&security=none#{urllib.parse.quote(name)}"
+                link = f"vless://{user.get('id')}@{vnext.get('address')}:{vnext.get('port')}?type={net}&security=none#{urllib.parse.quote(name)}"
                 configs.append(link)
-            
+
     content = "\n".join(configs)
     
     # Отправка в Gist
@@ -81,9 +77,9 @@ def update():
     
     with urllib.request.urlopen(gist_req) as response:
         if response.status == 200:
-            print("Gist updated successfully!")
+            print("Успешно обновлено!")
         else:
-            print(f"Error: {response.status}")
+            print(f"Ошибка: {response.status}")
 
 if __name__ == "__main__":
     update()
