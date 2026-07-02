@@ -1,6 +1,7 @@
 import os
 import json
 import urllib.request
+import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 # Конфигурационные данные
@@ -15,23 +16,29 @@ def update():
     with urllib.request.urlopen(req) as response:
         data = json.loads(response.read().decode())
     
-    # Шаг 2: Извлекаем fragmentServer из каждого конфига
+    # Шаг 2: Извлекаем fragmentServer и формируем VLESS-ссылки
     configs = []
-    for c in data.get('configs', []):
-        fragment_data = c.get('config', {}).get('fragmentServer')
-        if fragment_data:
-            # Превращаем объект fragmentServer обратно в компактную JSON-строку
-            # separators убирают лишние пробелы для экономии места
-            json_string = json.dumps(fragment_data, separators=(',', ':'))
-            configs.append(json_string)
     
-    # --- ДОБАВЛЕНИЕ ВРЕМЕНИ (УРАЛ, UTC+5) ---
+    # Добавляем заголовок с временем
     ural_offset = timezone(timedelta(hours=5))
     ural_time = datetime.now(ural_offset).strftime('%d.%m.%Y %H:%M:%S')
     header_line = f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?type=none#🕒_Update_Ural:_{ural_time}"
+    configs.append(header_line)
     
-    configs.insert(0, header_line)
-    # ----------------------------------------
+    for c in data.get('configs', []):
+        fs = c.get('config', {}).get('fragmentServer')
+        if fs:
+            # Извлекаем параметры (ключи адаптированы под типичные структуры)
+            uuid = fs.get('id', '00000000-0000-0000-0000-000000000000')
+            addr = fs.get('address', '127.0.0.1')
+            port = fs.get('port', 443)
+            
+            # Формируем имя для ссылки
+            name = f"Proxy_{addr}"
+            
+            # Собираем ссылку. Параметры можно расширить, если нужно (security, sni, etc.)
+            link = f"vless://{uuid}@{addr}:{port}?type=tcp&security=none#{urllib.parse.quote(name)}"
+            configs.append(link)
     
     content = "\n".join(configs)
     
