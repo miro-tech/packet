@@ -3,26 +3,33 @@ import json
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+# Конфигурационные данные
 GIST_ID = "5d53a0965ad16d964c5fb366e11532ff"
-DOWNLOAD_TOKEN = "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"
 GIST_TOKEN = os.getenv("GIST_TOKEN")
+DOWNLOAD_TOKEN = "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"
 SOURCE_URL = "https://raw.githubusercontent.com/Roadlux/assets-1.5.3.1/main/data"
 
 def update():
-    # Шаг 1: Скачиваем конфиги
+    # Шаг 1: Скачиваем конфиг
     req = urllib.request.Request(SOURCE_URL, headers={"Authorization": f"token {DOWNLOAD_TOKEN}"})
     with urllib.request.urlopen(req) as response:
         data = json.loads(response.read().decode())
     
-    # Шаг 2: Извлекаем строки
-    configs = [c['config']['fragmentServer'] for c in data['configs']]
+    # Шаг 2: Извлекаем fragmentServer из каждого конфига
+    configs = []
+    for c in data.get('configs', []):
+        fragment_data = c.get('config', {}).get('fragmentServer')
+        if fragment_data:
+            # Превращаем объект fragmentServer обратно в компактную JSON-строку
+            # separators убирают лишние пробелы для экономии места
+            json_string = json.dumps(fragment_data, separators=(',', ':'))
+            configs.append(json_string)
     
     # --- ДОБАВЛЕНИЕ ВРЕМЕНИ (УРАЛ, UTC+5) ---
     ural_offset = timezone(timedelta(hours=5))
     ural_time = datetime.now(ural_offset).strftime('%d.%m.%Y %H:%M:%S')
     header_line = f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?type=none#🕒_Update_Ural:_{ural_time}"
     
-    # Добавляем в начало списка
     configs.insert(0, header_line)
     # ----------------------------------------
     
