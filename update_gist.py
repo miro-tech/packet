@@ -23,10 +23,23 @@ GIST_TOKEN = os.getenv("GIST_TOKEN")   # лучше хранить в перем
 
 
 def get_private_github_file(token: str, repo: str, path: str, ref: str = "main") -> dict:
-    """Скачивает JSON из приватного репозитория через GitHub API"""
+    # Сначала проверяем, что токен вообще живой
+    print("Проверяю токен...")
+    req = urllib.request.Request("https://api.github.com/user", headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "Config-Updater"
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            user = json.loads(resp.read().decode())
+            print(f"Токен принадлежит: {user.get('login')}")
+    except Exception as e:
+        print("Токен невалидный или нет доступа даже к /user")
+        raise e
+
     api_url = f"https://api.github.com/repos/{repo}/contents/{path}?ref={ref}"
-    
-    print(f"Запрашиваю GitHub API: {api_url}")
+    print(f"Запрашиваю: {api_url}")
     
     req = urllib.request.Request(api_url, headers={
         "Authorization": f"Bearer {token}",
@@ -78,7 +91,7 @@ def make_trojan_xhttp(address, port, password, host, path="/html", security="tls
     return f"trojan://{password}@{address}:{port}?{query}#{urllib.parse.quote(remark)}"
 
 
-def extract_link(conf: dict, remark: str) -> str | None:
+def extract_link(conf: dict, remark: str):
     """Правильно достаёт ссылку из fragmentServer"""
     proxy = None
     for ob in conf.get("outbounds", []):
@@ -130,7 +143,6 @@ def extract_link(conf: dict, remark: str) -> str | None:
             remark=remark
         )
 
-    # fallback для простых string-конфигов
     return None
 
 
@@ -154,7 +166,6 @@ def update():
         if config_type == "string":
             link = c.get("config", {}).get("stringServer")
             if link:
-                # Добавляем имя, если его нет
                 if "#" not in link:
                     link = f"{link}#{urllib.parse.quote(name)}"
                 configs.append(link)
@@ -168,7 +179,7 @@ def update():
                 configs.append(link)
     
     content = "\n".join(configs)
-    print(f"Сгенерировано ссылок: {len(configs) - 1}")  # минус временная метка
+    print(f"Сгенерировано ссылок: {len(configs) - 1}")
     
     # 4. Заливаем в Gist
     if not GIST_TOKEN:
