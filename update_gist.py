@@ -10,7 +10,9 @@ from datetime import datetime, timedelta, timezone
 # ====================== НАСТРОЙКИ ======================
 
 # Источник (приватный репозиторий)
-GITHUB_TOKEN = "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"
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+if not GITHUB_TOKEN:
+    raise Exception("Не задан GITHUB_TOKEN")
 GITHUB_REPO = "RoadLuxGroup/assets-1.5.3.2"
 GITHUB_PATH = "data"
 GITHUB_REF = "main"
