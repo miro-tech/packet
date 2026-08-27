@@ -1,85 +1,204 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
 import json
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 
+# ====================== НАСТРОЙКИ ======================
+
+# Источник (приватный репозиторий)
+GITHUB_TOKEN = "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"
+GITHUB_REPO = "RoadLuxGroup/assets-1.5.3.2"
+GITHUB_PATH = "data"
+GITHUB_REF = "main"
+
+# Gist
 GIST_ID = "5d53a0965ad16d964c5fb366e11532ff"
-GIST_TOKEN = os.getenv("GIST_TOKEN")
-DOWNLOAD_TOKEN = "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"
-SOURCE_URL = "https://raw.githubusercontent.com/Roadlux/assets-1.5.3.1/main/data"
+GIST_TOKEN = os.getenv("GIST_TOKEN")   # лучше хранить в переменной окружения
+
+# =======================================================
+
+
+def get_private_github_file(token: str, repo: str, path: str, ref: str = "main") -> dict:
+    """Скачивает JSON из приватного репозитория через GitHub API"""
+    api_url = f"https://api.github.com/repos/{repo}/contents/{path}?ref={ref}"
+    
+    print(f"Запрашиваю GitHub API: {api_url}")
+    
+    req = urllib.request.Request(api_url, headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "Config-Updater"
+    })
+    
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        meta = json.loads(resp.read().decode("utf-8"))
+    
+    download_url = meta.get("download_url")
+    if not download_url:
+        raise Exception("Не удалось получить download_url")
+    
+    print("Скачиваю файл...")
+    req2 = urllib.request.Request(download_url, headers={"User-Agent": "Config-Updater"})
+    with urllib.request.urlopen(req2, timeout=30) as resp2:
+        return json.loads(resp2.read().decode("utf-8"))
+
+
+def make_vless_kcp(address, port, uuid, seed=None, header_type="dns", domain=None, encryption="none", remark=""):
+    params = {
+        "encryption": encryption,
+        "security": "none",
+        "type": "kcp",
+        "headerType": header_type,
+    }
+    if seed:
+        params["seed"] = seed
+    if domain:
+        params["host"] = domain
+    query = urllib.parse.urlencode(params)
+    return f"vless://{uuid}@{address}:{port}?{query}#{urllib.parse.quote(remark)}"
+
+
+def make_trojan_xhttp(address, port, password, host, path="/html", security="tls", sni=None, fp="chrome", alpn="h2", remark=""):
+    params = {
+        "security": security,
+        "type": "xhttp",
+        "path": path,
+        "host": host,
+        "mode": "auto",
+    }
+    if security == "tls":
+        params["fp"] = fp
+        params["alpn"] = alpn
+        params["sni"] = sni or host
+    query = urllib.parse.urlencode(params)
+    return f"trojan://{password}@{address}:{port}?{query}#{urllib.parse.quote(remark)}"
+
+
+def extract_link(conf: dict, remark: str) -> str | None:
+    """Правильно достаёт ссылку из fragmentServer"""
+    proxy = None
+    for ob in conf.get("outbounds", []):
+        if ob.get("tag") == "proxy":
+            proxy = ob
+            break
+    if not proxy:
+        for ob in conf.get("outbounds", []):
+            if ob.get("protocol") in ("vless", "trojan"):
+                proxy = ob
+                break
+    if not proxy:
+        return None
+
+    protocol = proxy.get("protocol")
+    stream = proxy.get("streamSettings", {})
+    network = stream.get("network", "")
+
+    if protocol == "vless" and network == "kcp":
+        vnext = proxy["settings"]["vnext"][0]
+        user = vnext["users"][0]
+        kcp = stream.get("kcpSettings", {})
+        header = kcp.get("header", {})
+        return make_vless_kcp(
+            address=vnext["address"],
+            port=vnext["port"],
+            uuid=user["id"],
+            seed=kcp.get("seed"),
+            header_type=header.get("type", "none"),
+            domain=header.get("domain"),
+            encryption=user.get("encryption", "none"),
+            remark=remark
+        )
+
+    elif protocol == "trojan" and network == "xhttp":
+        server = proxy["settings"]["servers"][0]
+        xhttp = stream.get("xhttpSettings", {})
+        tls = stream.get("tlsSettings", {})
+        return make_trojan_xhttp(
+            address=server["address"],
+            port=server["port"],
+            password=server["password"],
+            host=xhttp.get("host", ""),
+            path=xhttp.get("path", "/"),
+            security=stream.get("security", "none"),
+            sni=tls.get("serverName"),
+            fp=tls.get("fingerprint", "chrome"),
+            alpn=",".join(tls.get("alpn", ["h2"])) if tls.get("alpn") else "h2",
+            remark=remark
+        )
+
+    # fallback для простых string-конфигов
+    return None
+
 
 def update():
-    req = urllib.request.Request(SOURCE_URL, headers={"Authorization": f"token {DOWNLOAD_TOKEN}"})
-    with urllib.request.urlopen(req) as response:
-        data = json.loads(response.read().decode())
+    # 1. Получаем данные
+    data = get_private_github_file(GITHUB_TOKEN, GITHUB_REPO, GITHUB_PATH, GITHUB_REF)
     
     configs = []
     
-    # Добавляем временную метку в начало
+    # 2. Временная метка (Урал, UTC+5)
     ural_offset = timezone(timedelta(hours=5))
     ural_time = datetime.now(ural_offset).strftime('%d.%m.%Y %H:%M:%S')
     configs.append(f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?type=none#🕒_Update:_{ural_time}")
     
-    for c in data.get('configs', []):
-        name = c.get('countryName', 'Proxy')
-        fs = c.get('config', {}).get('fragmentServer', {})
-        outbounds = fs.get('outbounds', [])
-        proxy = next((o for o in outbounds if o.get('tag') == 'proxy'), None)
+    # 3. Обрабатываем все конфиги
+    for c in data.get("configs", []):
+        name = c.get("countryName", "Proxy")
+        config_type = c.get("config", {}).get("configType")
         
-        if proxy:
-            proto = proxy.get('protocol')
-            
-            if proto == 'trojan':
-                svr = proxy.get('settings', {}).get('servers', [{}])[0]
-                stream = proxy.get('streamSettings', {})
-                reality = stream.get('realitySettings', {})
-                xhttp = stream.get('xhttpSettings', {})
-                
-                # Собираем параметры для Reality
-                params = {
-                    "security": "reality",
-                    "sni": reality.get('serverName'),
-                    "fp": reality.get('fingerprint'),
-                    "pbk": reality.get('publicKey'),
-                    "sid": reality.get('shortId'),
-                    "type": stream.get('network'),
-                    "path": xhttp.get('path'),
-                    "host": xhttp.get('host')
-                }
-                # Убираем None значения
-                params = {k: v for k, v in params.items() if v}
-                
-                link = f"trojan://{svr.get('password')}@{svr.get('address')}:{svr.get('port')}?{urllib.parse.urlencode(params)}#{urllib.parse.quote(name)}"
+        # Уже готовая ссылка
+        if config_type == "string":
+            link = c.get("config", {}).get("stringServer")
+            if link:
+                # Добавляем имя, если его нет
+                if "#" not in link:
+                    link = f"{link}#{urllib.parse.quote(name)}"
                 configs.append(link)
-                
-            elif proto == 'vless':
-                vnext = proxy.get('settings', {}).get('vnext', [{}])[0]
-                user = vnext.get('users', [{}])[0]
-                net = proxy.get('streamSettings', {}).get('network', 'tcp')
-                
-                link = f"vless://{user.get('id')}@{vnext.get('address')}:{vnext.get('port')}?type={net}&security=none#{urllib.parse.quote(name)}"
+            continue
+        
+        # Fragment → генерируем ссылку
+        if config_type == "fragment":
+            fs = c.get("config", {}).get("fragmentServer", {})
+            link = extract_link(fs, name)
+            if link:
                 configs.append(link)
-
-    content = "\n".join(configs)
     
-    # Отправка в Gist
-    payload = json.dumps({"files": {"sub.txt": {"content": content}}}).encode('utf-8')
+    content = "\n".join(configs)
+    print(f"Сгенерировано ссылок: {len(configs) - 1}")  # минус временная метка
+    
+    # 4. Заливаем в Gist
+    if not GIST_TOKEN:
+        raise Exception("Не задан GIST_TOKEN (переменная окружения)")
+    
+    payload = json.dumps({
+        "files": {
+            "sub.txt": {
+                "content": content
+            }
+        }
+    }).encode("utf-8")
+    
     gist_req = urllib.request.Request(
         f"https://api.github.com/gists/{GIST_ID}",
         data=payload,
         method="PATCH",
         headers={
             "Authorization": f"token {GIST_TOKEN}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "Config-Updater"
         }
     )
     
     with urllib.request.urlopen(gist_req) as response:
         if response.status == 200:
-            print("Успешно обновлено!")
+            print("Успешно обновлено в Gist!")
         else:
-            print(f"Ошибка: {response.status}")
+            print(f"Ошибка Gist: {response.status}")
+
 
 if __name__ == "__main__":
     update()
