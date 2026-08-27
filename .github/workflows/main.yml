@@ -1,4 +1,5 @@
 name: Update Gist
+
 on:
   schedule:
     - cron: '0 * * * *'
@@ -22,4 +23,5 @@ jobs:
       - name: Update Gist
         env:
           GIST_TOKEN: ${{ secrets.PACKETTOKEN }}
+          GITHUB_TOKEN: ${{ secrets.SOURCE_TOKEN }}   # <-- добавили
         run: python update_gist.py
