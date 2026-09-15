@@ -13,8 +13,8 @@ from datetime import datetime, timedelta, timezone
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 if not GITHUB_TOKEN:
     raise Exception("Не задан GITHUB_TOKEN")
-GITHUB_REPO = "Roadlux/assets-1.5.3.3"
-GITHUB_PATH = "data"
+GITHUB_REPO = "vlshr/init-1.5.3.5"
+GITHUB_PATH = "info"
 GITHUB_REF = "main"
 
 # Gist
