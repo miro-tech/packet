@@ -167,10 +167,52 @@ def extract_link(conf: dict, remark: str):
             return None
 
     # ====================================================
-    # Trojan + XHTTP
+    # TROJAN + KCP
     # ====================================================
 
-    elif protocol == "trojan" and network == "xhttp":
+    if protocol == "trojan" and network == "kcp":
+
+        try:
+            server = proxy["settings"]["servers"][0]
+
+            address = server["address"]
+            port = server["port"]
+            password = server["password"]
+
+            kcp = stream.get("kcpSettings", {})
+            header = kcp.get("header", {})
+
+            params = {
+                "type": "kcp",
+                "security": stream.get("security", "none"),
+                "headerType": header.get("type", "none"),
+            }
+
+            # seed
+            if kcp.get("seed"):
+                params["seed"] = kcp["seed"]
+
+            # DNS header domain
+            if header.get("domain"):
+                params["host"] = header["domain"]
+
+            query = urllib.parse.urlencode(params)
+
+            return (
+                f"trojan://{password}@{address}:{port}"
+                f"?{query}"
+                f"#{urllib.parse.quote(remark)}"
+            )
+
+        except (KeyError, IndexError, TypeError) as e:
+            print(f"[!] Ошибка Trojan KCP ({remark}): {e}")
+            return None
+
+    # ====================================================
+    # TROJAN + XHTTP
+    # ====================================================
+
+    if protocol == "trojan" and network == "xhttp":
 
         try:
             server = proxy["settings"]["servers"][0]
@@ -201,6 +243,10 @@ def extract_link(conf: dict, remark: str):
         except (KeyError, IndexError, TypeError) as e:
             print(f"[!] Ошибка Trojan XHTTP ({remark}): {e}")
             return None
+
+    # ====================================================
+    # НЕПОДДЕРЖИВАЕМЫЙ ТИП
+    # ====================================================
 
     return None
 
